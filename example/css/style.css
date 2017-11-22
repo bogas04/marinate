@@ -1,0 +1,18 @@
+html {
+    font-size: 10px;
+}
+body {
+    margin: 0;
+    padding: 3rem; 
+    font-family: Arial, Helvetica, sans-serif;
+    color: #333333;
+    font-size: 1.8rem;
+}
+
+p {
+    padding: 2rem 0;
+}
+
+h1 {
+    font-size: 5rem;
+}

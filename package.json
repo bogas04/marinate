@@ -1,0 +1,19 @@
+{
+  "name": "marinate",
+  "version": "0.0.2",
+  "description": "A library to pipe a template string to a stream, \"marinating\" strings, functions, promises and streams together",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test"
+  },
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "author": "bogas04 (bogas04@gmail.com)",
+  "license": "MIT",
+  "devDependencies": {
+    "express": "^4.16.2",
+    "react": "^16.1.1",
+    "react-dom": "^16.1.1"
+  }
+}
