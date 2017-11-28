@@ -1,7 +1,6 @@
-const { Stream } = require('stream');
+const { Stream, Duplex } = require('stream')
 
-const log = (debug, mainItem, ...verboseItems) => debug !== 'off' &&
-  console.log('[marinate] ', mainItem, ...(debug === 'verbose' ? verboseItems : []))
+const log = (debug, mainItem, ...verboseItems) => debug !== 'off' && console.log('[marinate] ', mainItem, ...(debug === 'verbose' ? verboseItems : []))
 
 const typeOf = obj => {
   if (obj instanceof Stream) {
@@ -20,76 +19,91 @@ const typeOf = obj => {
 
 const write = stream => value => new Promise(resolve => stream.write(value, resolve))
 
+const bufferToReadableStream = buffer => {
+  const stream = new Duplex()
+  stream.push(buffer)
+  stream.push(null)
+  return stream
+}
+
+const stringToReadableStream = string => bufferToReadableStream(Buffer.from(string))
+
 const resolveAfterPipeAndEnd = (streamToPipe, streamToPipeInto, options) => new Promise((resolve, reject) => {
   streamToPipe.pipe(streamToPipeInto, options)
   streamToPipe.on('end', resolve)
 })
 
-// debug - off|basic|verbose
-module.exports = (staticParts, ...dynamicParts) => async (streamToWriteInto, debug = 'basic') => {
+const handlePart = async ({ part, streamToWriteInto, options }) => {
+  const { debug, stringToBufferThreshold } = options
+
   const writeToStream = write(streamToWriteInto)
 
-  // for..of will iterate only when internal `await`s are resolved.
-  for (let [index, staticPart] of staticParts.entries()) {
-    log(debug, 'Rendering static part', staticPart)
-    await writeToStream(staticPart)
+  switch (typeOf(part)) {
+    case 'function': {
+      await handlePart({ part: part(), streamToWriteInto, options })
+      break
+    }
+    case 'promise': {
+      await handlePart({ part: await part, streamToWriteInto, options })
+      break
+    }
+    case 'string': {
+      if (part.length >= stringToBufferThreshold) {
+        log(debug, `Rendering string part as stream`, part)
+        await resolveAfterPipeAndEnd(stringToReadableStream(part), streamToWriteInto, { end: false })
+        log(debug, `Rendered string part as stream`)
+      } else {
+        log(debug, 'Rendering string part', part)
+        await writeToStream(part)
+      }
+      break
+    }
+    case 'stream': {
+      const time = Date.now()
+      log(debug, `Rendering stream part [${time}]`)
+      await resolveAfterPipeAndEnd(part, streamToWriteInto, { end: false })
+      log(debug, `Rendered stream part [${time}] in ${Date.now() - time}ms`)
+      break
+    }
+    default: {
+      console.log({ part })
+      throw new Error(`Unknown type [${typeOf(part)}] of above part`);
+    }
+  }
+}
 
-    // if staticPart is last element, we just write it and end the stream
-    if (index === staticParts.length - 1) {
+const defaultOptions = {
+  debug: 'off',                      //   "debug": 'off' | 'basic' | 'verbose'
+  stringToBufferThreshold: Infinity, //   "stringToBufferThreshold": min string.length before converting it into a Buffer
+};
+
+module.exports = (staticParts, ...dynamicParts) => async (streamToWriteInto, options = defaultOptions) => {
+  const { debug, stringToBufferThreshold } = options;
+
+  for (let [index, staticPart] of staticParts.entries()) { // for..of will iterate only when internal `await`s are resolved.
+    await handlePart({
+      part: staticPart,                                   // take this string and
+      streamToWriteInto,                                  // directly write into the stream or pipe it
+      options,                                            // based on the options
+    });
+
+    if (index === staticParts.length - 1) {               // if staticPart is last element, we just end the stream
       log(debug, 'Finished Marinating')
       streamToWriteInto.end()
-    }
-    // for intermediate staticParts, we need to plug in the dynamic parts before streaming the next staticPart
-    else {
+
+    } else {                                              // for intermediate staticParts, we need to plug in the dynamic parts before streaming the next staticPart
       const dynamicPart = dynamicParts[index]
+      const typeOfDynamicPart = typeOf(dynamicPart)
 
-      switch (typeOf(dynamicPart)) {
-        case 'string': {
-          // dynamicPart is just a string, so we simply write it.
-          log(debug, 'Rendering string part', dynamicPart)
-          await writeToStream(dynamicPart)
-          break
-        }
-        case 'function': {
-          // dynamic part is a function
-          log(debug, `Rendering function part`)
+      if (['string', 'function'].includes(typeOfDynamicPart)) {
+        await handlePart({
+          part: dynamicPart,                              // take this dynamic part (string | function returning (string | promise | stream))
+          streamToWriteInto,                              // write it into stream 
+          options,                                        // based on options
+        })
 
-          // we get the return value of function
-          const result = dynamicPart()
-
-          switch (typeOf(result)) {
-            case 'stream': {
-              // dynamicPart is a stream, we pipe and end before iterating
-              const time = Date.now()
-              log(debug, `Rendering stream part [${time}]`)
-              await resolveAfterPipeAndEnd(result, streamToWriteInto, { end: false })
-              log(debug, `Rendered stream part [${time}] in ${Date.now() - time}ms`)
-              break
-            }
-            case 'string': {
-              await writeToStream(result)
-              log(debug, `Rendered function part as string`, result)
-              break
-            }
-            case 'promise': {
-              try {
-                const time = Date.now()
-                log(debug, `Awaiting function part's promise [${time}]`)
-                // dynamicPart is a promise, we resolve it before iterating
-                const value = await result
-                if (typeof value === 'string') {
-                  await writeToStream(value)
-                  log(debug, `Resolved function part as string in ${Date.now() - time}ms`, value)
-                } else {
-                  log('verbose', "Error! Promise doesn't resolve to a string. Resolved value is: ", { value })
-                }
-              } catch (err) {
-                log('verbose', "Error! Promise reject", { err })
-              }
-            }
-          }
-          break
-        }
+      } else {
+        throw new Error(`\${dynamicParts} can only be of type (string | function returning (string | promise | stream)). Found type ${typeOfDynamicPart}`)
       }
     }
   }

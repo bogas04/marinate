@@ -86,5 +86,7 @@ Currently we support following parts:
   * [x] returning promises
   * [x] returning streams
 
+**Note that a function can return a function, or a promsie can resovle to a function/promise. Basically the definition of dynami parts is recursive, ultimately evaluating to a string or stream. Be careful!**
+
 ## License 
 MIT

@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.16.2",
-    "marinate": "0.0.2",
+    "marinate": "^0.1.0",
     "react": "^16.1.1",
     "react-dom": "^16.1.1"
   }
