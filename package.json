@@ -1,7 +1,8 @@
 {
   "name": "marinate",
-  "version": "0.1.0",
-  "description": "A library to pipe a template string to a stream, \"marinating\" strings, functions, promises and streams together",
+  "version": "0.1.5",
+  "description":
+    "A library to pipe a template string to a stream, \"marinating\" strings, functions, promises and streams together",
   "main": "index.js",
   "scripts": {
     "test": "node test"
