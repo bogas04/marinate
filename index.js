@@ -68,7 +68,7 @@ const typeOf = obj => {
  * @returns {function} Function that returns promise
  */
 const write = stream => value =>
-  new Promise(resolve => stream.write(value, resolve));
+  new Promise(resolve => stream.write(value, resolve) === true && resolve());
 
 /**
  * Returns a stream created out of buffered passsed to it
@@ -98,7 +98,10 @@ const stringToReadableStream = string =>
  */
 const resolveAfterPipeAndEnd = (streamToPipe, streamToPipeInto, options) =>
   new Promise((resolve, reject) => {
-    streamToPipe.pipe(streamToPipeInto, options);
+    streamToPipe.pipe(
+      streamToPipeInto,
+      options
+    );
     streamToPipe.on("end", resolve);
   });
 
